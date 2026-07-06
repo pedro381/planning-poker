@@ -26,8 +26,7 @@
                     // upgrades.  The client will try WebSockets first and fall
                     // back to LongPolling automatically.
                     builder.withUrl('/_blazor', {
-                        transport: signalR.HttpTransportType.WebSockets |
-                                   signalR.HttpTransportType.LongPolling
+                        transport: 1 | 4
                     });
                 }
             }
