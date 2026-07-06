@@ -16,7 +16,23 @@
 
 <body>
     <Routes @rendermode="InteractiveServer" />
-    <script src="_framework/blazor.web.js"></script>
+    <script src="_framework/blazor.web.js" autostart="false"></script>
+    <script>
+        Blazor.start({
+            circuit: {
+                configureSignalR: function (builder) {
+                    // LongPolling is more compatible with corporate SSL-inspection
+                    // proxies (e.g. Zscaler) that may interfere with WebSocket
+                    // upgrades.  The client will try WebSockets first and fall
+                    // back to LongPolling automatically.
+                    builder.withUrl('/_blazor', {
+                        transport: signalR.HttpTransportType.WebSockets |
+                                   signalR.HttpTransportType.LongPolling
+                    });
+                }
+            }
+        });
+    </script>
 </body>
 
     <script src="emojiInterop.js"></script>

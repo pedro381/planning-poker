@@ -18,6 +18,41 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     options.KnownProxies.Clear();
 });
 
+// Configure CORS so that explicit origins are set on responses instead of a
+// wildcard.  Some corporate SSL-inspection proxies (e.g. Zscaler) will pass
+// an explicit Access-Control-Allow-Origin header through unchanged, whereas
+// they replace a missing/wildcard ACAO with their own "*".  Setting an
+// explicit origin + AllowCredentials() satisfies the browser's requirement
+// that ACAO must not be "*" when credentials are included.
+//
+// Populate "AllowedOrigins" in appsettings.json (or via the ALLOWEDORIGINS__0
+// environment variable on Render) with your production URL, e.g.:
+//   "AllowedOrigins": [ "https://planning-poker-rqig.onrender.com" ]
+builder.Services.AddCors(options =>
+{
+    var allowedOrigins = builder.Configuration
+        .GetSection("AllowedOrigins")
+        .Get<string[]>() ?? [];
+
+    options.AddDefaultPolicy(policy =>
+    {
+        if (allowedOrigins.Length > 0)
+        {
+            policy.WithOrigins(allowedOrigins)
+                  .AllowAnyHeader()
+                  .AllowAnyMethod()
+                  .AllowCredentials();
+        }
+        else
+        {
+            // Fallback: allow any origin without credentials (safe default).
+            policy.AllowAnyOrigin()
+                  .AllowAnyHeader()
+                  .AllowAnyMethod();
+        }
+    });
+});
+
 var app = builder.Build();
 
 // Must be first so subsequent middleware sees the correct scheme/host.
@@ -45,6 +80,7 @@ if (!app.Environment.IsDevelopment())
 // Do not redirect to HTTPS here; TLS is terminated by the reverse proxy.
 
 app.UseStaticFiles();
+app.UseCors();
 app.UseAntiforgery();
 
 app.MapRazorComponents<App>()
