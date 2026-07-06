@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.HttpOverrides;
 using Poker.Components;
 using Poker.Services;
 
@@ -8,7 +9,19 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 builder.Services.AddSingleton<PlanningPokerService>();
 
+// Trust the X-Forwarded-* headers from the reverse proxy (e.g. Render).
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    // Clear known networks/proxies so any upstream proxy is trusted.
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
 var app = builder.Build();
+
+// Must be first so subsequent middleware sees the correct scheme/host.
+app.UseForwardedHeaders();
 
 var pathBase = builder.Configuration["PathBase"];
 if (!string.IsNullOrWhiteSpace(pathBase))
@@ -29,7 +42,7 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-app.UseHttpsRedirection();
+// Do not redirect to HTTPS here; TLS is terminated by the reverse proxy.
 
 app.UseStaticFiles();
 app.UseAntiforgery();
