@@ -1,4 +1,3 @@
-Original file line number	Diff line number	Diff line change
 services:
   - type: web
     name: planning-poker
@@ -8,5 +7,3 @@ services:
     envVars:
       - key: ASPNETCORE_ENVIRONMENT
         value: Production
-      - key: PORT
-        value: 8080
