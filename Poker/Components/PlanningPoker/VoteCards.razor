@@ -1,0 +1,26 @@
+<section class="vote-cards">
+    <h2>Escolha seu voto</h2>
+    <div class="cards-grid">
+        @foreach (var card in Cards)
+        {
+            var isSelected = card == SelectedVote;
+            <button
+                class="vote-card @(isSelected ? "selected" : string.Empty)"
+                type="button"
+                @onclick="() => OnVoteSelected.InvokeAsync(card)">
+                @card
+            </button>
+        }
+    </div>
+</section>
+
+@code {
+    [Parameter]
+    public IReadOnlyList<string> Cards { get; set; } = [];
+
+    [Parameter]
+    public string? SelectedVote { get; set; }
+
+    [Parameter]
+    public EventCallback<string> OnVoteSelected { get; set; }
+}

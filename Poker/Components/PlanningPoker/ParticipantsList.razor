@@ -1,0 +1,357 @@
+@using Poker.Models
+@using System.Globalization
+@implements IDisposable
+@inject IJSRuntime Js
+
+<section class="participants-card">
+    <div class="participants-header">
+        <h2>Participantes</h2>
+        <span>@Participants.Count</span>
+    </div>
+
+    <ul>
+        @foreach (var participant in Participants)
+        {
+            <li class="participant-item @(HasIncomingPoop(participant.Id) ? "emoji-target" : string.Empty)">
+                <div class="name-cell" @onmouseenter="() => BeginHover(participant.Id)" @onmouseleave="OnHoverLeft">
+                    <button
+                        id="@BuildTargetElementId(participant.Id)"
+                        type="button"
+                        class="name-hit-btn"
+                        title="Lancar emoji"
+                        @onclick="() => ThrowSelectedEmoji(participant.Id)">
+                        <strong>@participant.Name</strong>
+                    </button>
+                    @if (participant.Id == CurrentParticipantId)
+                    {
+                        <small>Você</small>
+                    }
+
+                    @if (_paletteParticipantId == participant.Id)
+                    {
+                        <div class="emoji-palette" @onmouseenter="KeepPaletteVisible" @onmouseleave="HidePalette">
+                            @foreach (var option in _quickEmojiOptions)
+                            {
+                                <button
+                                    type="button"
+                                    class="emoji-option @(option.Symbol == _selectedEmoji ? "selected" : string.Empty)"
+                                    title="@option.Label"
+                                    @onclick="() => SelectEmoji(option.Symbol)">
+                                    @option.Symbol
+                                </button>
+                            }
+                            <button type="button" class="emoji-option more" @onclick="OpenEmojiModal">+</button>
+                        </div>
+                    }
+                </div>
+
+                @if (VotesRevealed)
+                {
+                    <span class="status vote-value">@(participant.Vote ?? "-")</span>
+                }
+                else
+                {
+                    <span class="status @(participant.HasVoted ? "voted" : "waiting")">
+                        @(participant.HasVoted ? "Votou" : "Aguardando")
+                    </span>
+                }
+            </li>
+        }
+    </ul>
+</section>
+
+<div class="emoji-overlay" aria-hidden="true">
+    @foreach (var poopThrow in PoopThrows)
+    {
+        <span
+            @key="poopThrow.Id"
+            class="emoji-throw"
+            style="@BuildThrowStyle(poopThrow)"
+            aria-hidden="true">
+            @poopThrow.Emoji
+        </span>
+    }
+</div>
+
+@if (_isEmojiModalOpen)
+{
+    <div class="emoji-modal-backdrop" @onclick="CloseEmojiModal">
+        <div class="emoji-modal" @onclick:stopPropagation="true">
+            <div class="emoji-modal-header">
+                <h3>Escolher Emoji</h3>
+                <button type="button" class="close-modal" @onclick="CloseEmojiModal">x</button>
+            </div>
+
+            <input
+                class="emoji-search"
+                placeholder="Pesquisar emoji"
+                @bind-value="_emojiSearch"
+                @bind-value:event="oninput" />
+
+            <div class="emoji-grid">
+                @foreach (var option in FilteredModalOptions())
+                {
+                    <button type="button" class="emoji-option" title="@option.Label" @onclick="() => ThrowEmojiFromModal(option.Symbol)">@option.Symbol</button>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private static readonly EmojiOption[] _quickEmojiOptions = [
+        new("💩", "Poop"),
+        new("🍆", "Berinjela"),
+        new("🔪", "Faca"),
+        new("🪨", "Pedra"),
+        new("🍅", "Tomate"),
+        new("😂", "Risada")
+    ];
+private static readonly EmojiOption[] _modalEmojiOptions =
+[
+    // Bagunça / Arremessáveis
+    new("💩", "Poop"),
+    new("🍅", "Tomate"),
+    new("🥚", "Ovo"),
+    new("🍌", "Banana"),
+    new("🌶️", "Pimenta"),
+    new("🍆", "Berinjela"),
+    new("🥥", "Coco"),
+    new("🍉", "Melancia"),
+    new("🍍", "Abacaxi"),
+    new("🧅", "Cebola"),
+
+    // Objetos
+    new("📄", "Bola de papel"),
+    new("🧻", "Papel"),
+    new("🧽", "Esponja"),
+    new("🧼", "Sabão"),
+    new("🫧", "Bolhas"),
+    new("🪨", "Pedra"),
+    new("🪵", "Madeira"),
+    new("🧱", "Tijolo"),
+    new("🔨", "Martelo"),
+    new("🪃", "Bumerangue"),
+
+    // Impacto
+    new("💥", "Impacto"),
+    new("⚡", "Raio"),
+    new("🔥", "Fogo"),
+    new("🧊", "Gelo"),
+    new("💨", "Pum"),
+    new("🌪️", "Tornado"),
+    new("☄️", "Cometa"),
+    new("🌊", "Onda"),
+    new("⭐", "Estrela"),
+    new("🎯", "Alvo"),
+
+    // Ferramentas / Perigo
+    new("🔪", "Faca"),
+    new("🪓", "Machado"),
+    new("🏹", "Arco"),
+    new("🧨", "Dinamite"),
+    new("💣", "Bomba"),
+    new("🔫", "Pistola"),
+    new("⚔️", "Espadas"),
+    new("🛡️", "Escudo"),
+
+    // Personagens
+    new("😈", "Sapeca"),
+    new("😂", "Risada"),
+    new("🤡", "Palhaço"),
+    new("🥸", "Disfarce"),
+    new("👻", "Fantasma"),
+    new("🤖", "Robô"),
+    new("👽", "Alien"),
+    new("🎃", "Abóbora"),
+    new("💀", "Caveira"),
+    new("👹", "Ogro"),
+
+    // Animais
+    new("🐒", "Macaco"),
+    new("🐔", "Galinha"),
+    new("🦆", "Pato"),
+    new("🐸", "Sapo"),
+    new("🦄", "Unicórnio"),
+    new("🐧", "Pinguim"),
+    new("🦖", "Dinossauro"),
+    new("🐙", "Polvo"),
+
+    // Diversão
+    new("🎉", "Festa"),
+    new("🎈", "Balão"),
+    new("🎁", "Presente"),
+    new("🎲", "Dado"),
+    new("🃏", "Coringa"),
+    new("🏆", "Troféu"),
+    new("🎮", "Controle"),
+    new("🎸", "Guitarra")
+];
+
+    [Parameter]
+    public IReadOnlyList<Participant> Participants { get; set; } = [];
+
+    [Parameter]
+    public bool VotesRevealed { get; set; }
+
+    [Parameter]
+    public string CurrentParticipantId { get; set; } = string.Empty;
+
+    [Parameter]
+    public IReadOnlyList<PoopThrow> PoopThrows { get; set; } = [];
+
+    [Parameter]
+    public EventCallback<EmojiThrowRequest> OnThrowEmoji { get; set; }
+
+    private CancellationTokenSource? _hoverDelayCts;
+    private string? _hoveringParticipantId;
+    private string? _paletteParticipantId;
+    private bool _isEmojiModalOpen;
+    private string _emojiSearch = string.Empty;
+    private string _selectedEmoji = "💩";
+    private readonly Dictionary<string, ElementCenter> _participantCenters = [];
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await RefreshParticipantCenters();
+    }
+
+    private bool HasIncomingPoop(string participantId)
+    {
+        return PoopThrows.Any(t => t.TargetParticipantId == participantId);
+    }
+
+    private string BuildThrowStyle(PoopThrow poopThrow)
+    {
+        var hasCenter = _participantCenters.TryGetValue(poopThrow.TargetParticipantId, out var center);
+        var toX = hasCenter && center is not null ? center.X : 50d;
+        var toY = hasCenter && center is not null ? center.Y : 50d;
+
+        return string.Create(CultureInfo.InvariantCulture,
+            $"--from-x-vw:{poopThrow.FromXVw:0.##}; --from-y-vh:{poopThrow.FromYVh:0.##}; --from-rot:{poopThrow.FromRotationDeg:0.##}deg; --duration:{poopThrow.DurationMs}ms; --to-x-vw:{toX:0.##}; --to-y-vh:{toY:0.##};");
+    }
+
+    private static string BuildTargetElementId(string participantId) => $"participant-target-{participantId}";
+
+    private async Task RefreshParticipantCenters()
+    {
+        if (Participants.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var participant in Participants)
+        {
+            var elementId = BuildTargetElementId(participant.Id);
+            var center = await Js.InvokeAsync<ElementCenter?>("pokerEmoji.getElementCenter", elementId);
+            if (center is not null)
+            {
+                _participantCenters[participant.Id] = center;
+            }
+        }
+    }
+
+    private void BeginHover(string participantId)
+    {
+        _hoveringParticipantId = participantId;
+        _hoverDelayCts?.Cancel();
+        _hoverDelayCts?.Dispose();
+        _hoverDelayCts = new CancellationTokenSource();
+
+        _ = ShowPaletteAfterDelay(participantId, _hoverDelayCts.Token);
+    }
+
+    private void OnHoverLeft()
+    {
+        _hoveringParticipantId = null;
+        _hoverDelayCts?.Cancel();
+    }
+
+    private async Task ShowPaletteAfterDelay(string participantId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(1000, cancellationToken);
+            if (!cancellationToken.IsCancellationRequested && _hoveringParticipantId == participantId)
+            {
+                _paletteParticipantId = participantId;
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (TaskCanceledException)
+        {
+        }
+    }
+
+    private void KeepPaletteVisible()
+    {
+        _hoverDelayCts?.Cancel();
+    }
+
+    private void HidePalette()
+    {
+        _paletteParticipantId = null;
+    }
+
+    private void SelectEmoji(string emoji)
+    {
+        _selectedEmoji = emoji;
+        _paletteParticipantId = null;
+    }
+
+    private async Task ThrowSelectedEmoji(string participantId)
+    {
+        _paletteParticipantId = null;
+
+        await OnThrowEmoji.InvokeAsync(new EmojiThrowRequest
+        {
+            TargetParticipantId = participantId,
+            Emoji = _selectedEmoji
+        });
+    }
+
+    private void OpenEmojiModal()
+    {
+        _emojiSearch = string.Empty;
+        _isEmojiModalOpen = true;
+        _paletteParticipantId = null;
+    }
+
+    private void CloseEmojiModal()
+    {
+        _isEmojiModalOpen = false;
+    }
+
+    private void ThrowEmojiFromModal(string emoji)
+    {
+        _selectedEmoji = emoji;
+        CloseEmojiModal();
+    }
+
+    private IEnumerable<EmojiOption> FilteredModalOptions()
+    {
+        if (string.IsNullOrWhiteSpace(_emojiSearch))
+        {
+            return _modalEmojiOptions;
+        }
+
+        return _modalEmojiOptions.Where(option =>
+            option.Label.Contains(_emojiSearch, StringComparison.OrdinalIgnoreCase) ||
+            option.Symbol.Contains(_emojiSearch, StringComparison.OrdinalIgnoreCase));
+    }
+
+    public void Dispose()
+    {
+        _hoverDelayCts?.Cancel();
+        _hoverDelayCts?.Dispose();
+    }
+
+    private sealed record EmojiOption(string Symbol, string Label);
+
+    private sealed class ElementCenter
+    {
+        public double X { get; set; }
+
+        public double Y { get; set; }
+    }
+}

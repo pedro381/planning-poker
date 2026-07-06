@@ -1,0 +1,40 @@
+.top-nav {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    min-height: 62px;
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid #dce8f5;
+    background: rgba(242, 248, 254, 0.95);
+    backdrop-filter: blur(6px);
+}
+
+.brand {
+    text-decoration: none;
+    color: #0f2742;
+    font-weight: 800;
+    letter-spacing: 0.01em;
+}
+
+nav {
+    display: flex;
+    gap: 0.4rem;
+}
+
+nav ::deep .nav-link {
+    text-decoration: none;
+    border-radius: 999px;
+    padding: 0.38rem 0.85rem;
+    color: #224b72;
+    font-weight: 700;
+}
+
+nav ::deep .nav-link.active {
+    color: #fff;
+    background: #1d6ea9;
+}

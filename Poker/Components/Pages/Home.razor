@@ -1,0 +1,89 @@
+﻿@page "/"
+@inject PlanningPokerService PokerService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Planning Poker</PageTitle>
+
+<section class="home-shell">
+	<div class="hero">
+		<p class="eyebrow">Planning Poker</p>
+		<h1>Estimativas rápidas e colaborativas</h1>
+		<p class="subtitle">Crie uma sala para iniciar a rodada ou entre com um código compartilhado.</p>
+	</div>
+
+	<div class="entry-card">
+		<label for="name">Seu nome</label>
+		<InputText id="name" @bind-Value="_userName" class="form-control" placeholder="Ex.: Ana" />
+
+		<div class="actions">
+			<button type="button" class="primary-btn" @onclick="CreateRoom">Criar sala</button>
+		</div>
+
+		<div class="join-row">
+			<InputText @bind-Value="_roomCode" class="form-control" placeholder="Código da sala" />
+			<button type="button" class="secondary-btn" @onclick="JoinRoom">Entrar</button>
+		</div>
+
+		@if (!string.IsNullOrWhiteSpace(_errorMessage))
+		{
+			<p class="error-message">@_errorMessage</p>
+		}
+	</div>
+</section>
+
+@code {
+	private string _userName = string.Empty;
+	private string _roomCode = string.Empty;
+	private string _errorMessage = string.Empty;
+
+	private void CreateRoom()
+	{
+		if (!HasValidName())
+		{
+			return;
+		}
+
+		var (roomCode, participantId) = PokerService.CreateRoom(_userName);
+		NavigateToRoom(roomCode, participantId);
+	}
+
+	private void JoinRoom()
+	{
+		if (!HasValidName())
+		{
+			return;
+		}
+
+		if (string.IsNullOrWhiteSpace(_roomCode))
+		{
+			_errorMessage = "Informe o código da sala para entrar.";
+			return;
+		}
+
+		if (PokerService.JoinRoom(_roomCode, _userName, null, out var participantId))
+		{
+			NavigateToRoom(_roomCode, participantId);
+			return;
+		}
+
+		_errorMessage = "Sala não encontrada. Verifique o código informado.";
+	}
+
+	private bool HasValidName()
+	{
+		if (!string.IsNullOrWhiteSpace(_userName))
+		{
+			return true;
+		}
+
+		_errorMessage = "Informe seu nome para continuar.";
+		return false;
+	}
+
+	private void NavigateToRoom(string roomCode, string participantId)
+	{
+		var normalizedRoomCode = roomCode.Trim().ToUpperInvariant();
+		var encodedName = Uri.EscapeDataString(_userName.Trim());
+		NavigationManager.NavigateTo($"/sala/{normalizedRoomCode}?nome={encodedName}&pid={participantId}");
+	}
+}

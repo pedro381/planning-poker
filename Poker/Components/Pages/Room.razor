@@ -1,0 +1,202 @@
+@page "/sala/{RoomCode}"
+@implements IDisposable
+@inject NavigationManager NavigationManager
+@inject PlanningPokerService PokerService
+@using Microsoft.AspNetCore.WebUtilities
+
+<PageTitle>Sala @RoomCode</PageTitle>
+
+@if (_roomMissing)
+{
+    <section class="empty-room">
+        <h1>Sala não encontrada</h1>
+        <p>Confira o código e tente novamente.</p>
+        <a class="go-home" href="/">Voltar para início</a>
+    </section>
+}
+else if (!_isJoined)
+{
+    <section class="join-inline">
+        <h1>Entrar na sala @RoomCode</h1>
+        <InputText @bind-Value="_userName" class="form-control" placeholder="Seu nome" />
+        <button type="button" @onclick="JoinCurrentRoom">Entrar na sala</button>
+
+        @if (!string.IsNullOrWhiteSpace(_joinErrorMessage))
+        {
+            <p class="error-message">@_joinErrorMessage</p>
+        }
+    </section>
+}
+else if (_room is not null)
+{
+    var currentUserVote = _room.Participants.FirstOrDefault(p => p.Id == _participantId)?.Vote;
+    var baseUrl = NavigationManager.ToAbsoluteUri($"/sala/{_room.Code}").ToString();
+
+    <section class="room-shell">
+        <div class="room-headline">
+            <div>
+                <p class="eyebrow">Sala ativa</p>
+                <h1>Planning Poker</h1>
+            </div>
+
+            <div class="room-code-card">
+                <span>Código da sala</span>
+                <strong>@_room.Code</strong>
+                <small>@baseUrl</small>
+            </div>
+        </div>
+
+        <div class="room-grid">
+            <ParticipantsList
+                Participants="_room.Participants"
+                VotesRevealed="_room.VotesRevealed"
+                CurrentParticipantId="_participantId"
+                PoopThrows="_room.PoopThrows"
+                OnThrowEmoji="ThrowEmojiAtParticipant" />
+
+            <div class="voting-panel">
+                <VoteCards
+                    Cards="PokerService.VotingCards"
+                    SelectedVote="currentUserVote"
+                    OnVoteSelected="SelectVote" />
+
+                <div class="round-actions">
+                    <button type="button" class="primary" @onclick="RevealVotes" disabled="@_room.VotesRevealed">Revelar Votos</button>
+                    <button type="button" class="secondary" @onclick="StartNewRound">Nova Rodada</button>
+                </div>
+            </div>
+        </div>
+    </section>
+}
+
+@code {
+    [Parameter]
+    public string RoomCode { get; set; } = string.Empty;
+
+    private PokerRoom? _room;
+    private string _participantId = string.Empty;
+    private string _userName = string.Empty;
+    private bool _isJoined;
+    private bool _roomMissing;
+    private string _joinErrorMessage = string.Empty;
+
+    protected override void OnInitialized()
+    {
+        PokerService.RoomsChanged += OnRoomsChanged;
+    }
+
+    protected override void OnParametersSet()
+    {
+        RefreshRoom();
+        RestoreFromQueryString();
+    }
+
+    private void RestoreFromQueryString()
+    {
+        if (_roomMissing)
+        {
+            return;
+        }
+
+        var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
+        var query = QueryHelpers.ParseQuery(uri.Query);
+
+        var hasName = query.TryGetValue("nome", out var userNameValues);
+        var hasParticipant = query.TryGetValue("pid", out var participantValues);
+
+        if (!hasName || !hasParticipant)
+        {
+            return;
+        }
+
+        var name = userNameValues.ToString();
+        var participantId = participantValues.ToString();
+
+        if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(participantId))
+        {
+            return;
+        }
+
+        if (PokerService.JoinRoom(RoomCode, name, participantId, out var resolvedParticipantId))
+        {
+            _participantId = resolvedParticipantId;
+            _userName = name;
+            _isJoined = true;
+            _joinErrorMessage = string.Empty;
+            RefreshRoom();
+        }
+    }
+
+    private void JoinCurrentRoom()
+    {
+        if (string.IsNullOrWhiteSpace(_userName))
+        {
+            _joinErrorMessage = "Informe seu nome para entrar na sala.";
+            return;
+        }
+
+        if (!PokerService.JoinRoom(RoomCode, _userName, null, out var resolvedParticipantId))
+        {
+            _joinErrorMessage = "Não foi possível entrar na sala.";
+            return;
+        }
+
+        _participantId = resolvedParticipantId;
+        _isJoined = true;
+        _joinErrorMessage = string.Empty;
+        RefreshRoom();
+
+        var encodedName = Uri.EscapeDataString(_userName.Trim());
+        NavigationManager.NavigateTo($"/sala/{RoomCode}?nome={encodedName}&pid={_participantId}", replace: true);
+    }
+
+    private void SelectVote(string vote)
+    {
+        if (!_isJoined)
+        {
+            return;
+        }
+
+        PokerService.SetVote(RoomCode, _participantId, vote);
+    }
+
+    private void RevealVotes()
+    {
+        PokerService.RevealVotes(RoomCode);
+    }
+
+    private void StartNewRound()
+    {
+        PokerService.StartNewRound(RoomCode);
+    }
+
+    private void ThrowEmojiAtParticipant(EmojiThrowRequest request)
+    {
+        if (!_isJoined)
+        {
+            return;
+        }
+
+        PokerService.ThrowEmoji(RoomCode, request.TargetParticipantId, request.Emoji);
+    }
+
+    private void RefreshRoom()
+    {
+        _room = PokerService.GetRoom(RoomCode);
+        _roomMissing = _room is null;
+    }
+
+    private void OnRoomsChanged()
+    {
+        _ = InvokeAsync(() =>
+        {
+            RefreshRoom();
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        PokerService.RoomsChanged -= OnRoomsChanged;
+    }
+}
