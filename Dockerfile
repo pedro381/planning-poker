@@ -13,8 +13,6 @@ WORKDIR /app
 COPY --from=build /app/publish .
 
 # Render provides PORT at runtime; default to 8080 for local container runs.
-ENV PORT=8080
-ENV ASPNETCORE_URLS=http://+:${PORT}
 EXPOSE 8080
 
-ENTRYPOINT ["dotnet", "Poker.dll"]
+ENTRYPOINT ["sh", "-c", "ASPNETCORE_URLS=http://+:${PORT:-8080} dotnet Poker.dll"]
